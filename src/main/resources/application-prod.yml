@@ -1,0 +1,46 @@
+# — Database (Production) —
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${RDS.URL}
+    username: ${RDS.USERNAME}
+    password: ${RDS.PASSWORD}
+
+  # — JAP & Hibernate —
+  jpa:
+    hibernate:
+      ddl-auto: validate # 프로덕션용: 스키마 검증만 수행
+    show-sql: false # 프로덕션에서는 SQL 로그 비활성화
+    properties:
+      hibernate:
+        format_sql: false
+        default_batch_fetch_size: 100
+
+  # — Kakao Integration (프로덕션용) —
+  kakao:
+    client-id: ${KAKAO.CLIENT-ID}
+    redirect-uri: ${KAKAO.REDIRECT-URI}
+
+# — JWT Secret Key (프로덕션용) —
+
+jwt:
+  secret: ${JWT.SECRET}
+  access-token-validity-in-milliseconds: ${JWT.ACCESS-TOKEN-VALIDITY-IN-MILLISECONDS}
+  refresh-token-validity-in-milliseconds: ${JWT.REFRESH-TOKEN-VALIDITY-IN-MILLISECONDS}
+
+# — Logging (프로덕션용) —
+
+logging:
+  level:
+    org.example.berichbe: warn
+    org.springframework.security: warn
+    root: warn
+
+# — Swagger (프로덕션용) —
+
+springdoc:
+  api-docs:
+    enabled: false # 프로덕션에서는 API 문서 비활성화
+  swagger-ui:
+    enabled: false # 프로덕션에서는 Swagger UI 비활성화

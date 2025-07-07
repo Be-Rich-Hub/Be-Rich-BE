@@ -1,9 +1,6 @@
 spring:
   config:
     import:
-      - application-dev.yml
-      - application-prod.yml
-
-logging:
-  level:
-    root: ${LOG_LEVEL:info}
+      - application-secret.yml
+  profiles:
+    active: local  # 기본 프로파일을 local로 설정
