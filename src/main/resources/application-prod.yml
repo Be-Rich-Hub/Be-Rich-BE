@@ -3,9 +3,9 @@
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: ${RDS.URL}
-    username: ${RDS.USERNAME}
-    password: ${RDS.PASSWORD}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
 
   # — JAP & Hibernate —
   jpa:
@@ -19,15 +19,15 @@ spring:
 
   # — Kakao Integration (프로덕션용) —
   kakao:
-    client-id: ${KAKAO.CLIENT-ID}
-    redirect-uri: ${KAKAO.REDIRECT-URI}
+    client-id: ${KAKAO_CLIENT_ID}
+    redirect-uri: ${KAKAO_REDIRECT_URI}
 
 # — JWT Secret Key (프로덕션용) —
 
 jwt:
-  secret: ${JWT.SECRET}
-  access-token-validity-in-milliseconds: ${JWT.ACCESS-TOKEN-VALIDITY-IN-MILLISECONDS}
-  refresh-token-validity-in-milliseconds: ${JWT.REFRESH-TOKEN-VALIDITY-IN-MILLISECONDS}
+  secret: ${JWT_SECRET_KEY}
+  access-token-validity-in-milliseconds: ${JWT_ACCESS_TOKEN_EXPIRATION}
+  refresh-token-validity-in-milliseconds: ${JWT_REFRESH_TOKEN_EXPIRATION}
 
 # — Logging (프로덕션용) —
 
