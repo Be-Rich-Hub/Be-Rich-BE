@@ -1,5 +1,6 @@
-# Use the official OpenJDK 17 runtime as a parent image
 FROM openjdk:17-jdk-slim
 ARG JAR_FILE=build/libs/app.jar
 COPY ${JAR_FILE} app.jar
-ENTRYPOINT ["java", "-Duser.timezone=Asia/Seoul", "-Dspring.profiles.active=dev", "-jar", "/app.jar"]
+
+# 런타임 환경변수 사용을 위해 sh -c 사용
+ENTRYPOINT ["sh", "-c", "java -Duser.timezone=Asia/Seoul -Dspring.profiles.active=${PROFILE} -jar /app.jar"]

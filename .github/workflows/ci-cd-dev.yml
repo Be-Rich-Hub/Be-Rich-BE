@@ -1,0 +1,94 @@
+name: [development] CI/CD
+
+on:
+  push:
+    branches:
+      - develop  # develop 브랜치 기준으로 실행
+
+jobs:
+  build-docker-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup application-dev.yml
+        run: |
+          cd backend/src/main/resources
+          echo "${{ secrets.APPLICATION_DEV }}" > application-dev.yml
+        shell: bash
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build with Gradle Wrapper
+        run: ./gradlew clean build -x test
+
+      - name: DockerHub Login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Docker Image Build
+        run:  docker build -t ${{ secrets.DOCKER_USERNAME }}/berich:latest .
+
+      - name: Docker Hub Push
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/berich:latest
+
+  deploy-to-ec2:
+    needs: build-docker-image
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into EC2 and deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            
+            set -e
+            
+            # 배포 디렉터리 준비
+            mkdir -p ~/deploy
+            cd ~/deploy
+      
+            # 현재 날짜/시간을 기준으로 스트림 ID 생성
+            LOG_STREAM_ID=$(date +"%Y%m%d-%H%M%S")  # 예: 20250414-123456
+            
+            # .env 파일 없으면 생성
+            if [ ! -f ".env" ]; then
+              echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" > .env
+              echo "LOG_STREAM_ID=${LOG_STREAM_ID}" >> .env
+              echo "PROFILE=dev" >> .env
+            fi
+      
+            # Docker 로그인
+            echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+      
+            # 기존 컨테이너 제거
+            if [ -f "docker-compose.yml" ]; then
+              sudo docker-compose down
+            fi
+      
+            # 최신 docker-compose.yml 받아오기
+            curl -L -o https://raw.githubusercontent.com/${{ github.repository }}/develop/docker-compose.dev.yml
+      
+            # 최신 이미지 pull
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/berich:latest
+      
+            # 오래된 이미지 정리
+            sudo docker image prune -f
+      
+            # 환경 변수로 LOG_STREAM_ID 전달하며 compose 실행
+            sudo -E docker-compose up -d --force-recreate --remove-orphans

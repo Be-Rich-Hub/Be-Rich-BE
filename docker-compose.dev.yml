@@ -1,12 +1,29 @@
-version: '3.8'
+version: "3.8"
+
 services:
   app:
-    image: ${DOCKER_REPO_NAME}:${DOCKER_IMAGE_VERSION_TAG}
+    container_name: web-server
+    image: ${DOCKER_REPO_NAME}/berich:latest
     environment:
       PROFILE: dev
       TZ: Asia/Seoul
+    restart: unless-stopped
     ports:
       - "8080:8080"
+    depends_on:
+      - redis
     env_file:
       - .env
-    restart: always
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: berich-server-log
+        awslogs-region: ap-northeast-2
+        awslogs-stream: berich-server-${LOG_STREAM_ID}
+
+  redis:
+    container_name: redis
+    image: redis:latest
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
