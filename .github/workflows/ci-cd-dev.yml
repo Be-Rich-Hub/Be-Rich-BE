@@ -24,7 +24,7 @@ jobs:
 
       - name: Setup application-dev.yml
         run: |
-          cd backend/src/main/resources
+          cd src/main/resources
           echo "${{ secrets.APPLICATION_DEV }}" > application-dev.yml
         shell: bash
 
