@@ -1,0 +1,5 @@
+# Use the official OpenJDK 17 runtime as a parent image
+FROM openjdk:17-jdk-slim
+ARG JAR_FILE=build/libs/app.jar
+COPY ${JAR_FILE} app.jar
+ENTRYPOINT ["java", "-Duser.timezone=Asia/Seoul", "-Dspring.profiles.active=prod", "-jar", "/app.jar"]

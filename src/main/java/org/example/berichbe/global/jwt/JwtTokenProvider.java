@@ -6,7 +6,8 @@ import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.berichbe.global.config.JwtProperties;
+
+import org.example.berichbe.global.property.JwtProperty;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -25,7 +26,7 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class JwtTokenProvider {
-    private final JwtProperties jwtProperties;
+    private final JwtProperty jwtProperty;
     private Key key;
     private static final String AUTHORITIES_KEY = "auth";
     private static final String BEARER_PREFIX = "Bearer ";
@@ -33,7 +34,7 @@ public class JwtTokenProvider {
     // JWT 서명용 비밀 키 초기화
     @PostConstruct // 의존성 주입이 끝난 뒤 자동으로 실행되는 초기화 메서드
     public void init() {
-        byte[] keyBytes = jwtProperties.getSecret().getBytes();
+        byte[] keyBytes = jwtProperty.getSecret().getBytes();
         this.key = Keys.hmacShaKeyFor(keyBytes);
     }
 
@@ -44,7 +45,7 @@ public class JwtTokenProvider {
                 .collect(Collectors.joining(","));
 
         long now = (new Date()).getTime();
-        Date accessTokenExpiresIn = new Date(now + jwtProperties.getAccessTokenValidityInMilliseconds());
+        Date accessTokenExpiresIn = new Date(now + jwtProperty.getAccessTokenValidityInMilliseconds());
 
         return Jwts.builder()
                 .setSubject(authentication.getName()) // User ID (여기서는 email을 사용)

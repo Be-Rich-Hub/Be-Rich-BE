@@ -1,4 +1,4 @@
-package org.example.berichbe.global.config;
+package org.example.berichbe.global.property;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -9,8 +9,8 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "jwt") // application.yml에서 jwt로 시작하는 값들 바인딩
 @Getter
 @Setter
-public class JwtProperties {
+public class JwtProperty {
     private String secret;
     private long accessTokenValidityInMilliseconds;
-    // private long refreshTokenValidityInMilliseconds; // 필요시 추가
+     private long refreshTokenValidityInMilliseconds; // 필요시 추가
 } 
