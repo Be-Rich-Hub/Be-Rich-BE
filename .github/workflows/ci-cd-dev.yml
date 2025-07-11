@@ -49,7 +49,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Docker Image Build
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/berich:${{ steps.set-tag.outputs.image_tag }} .
+        run: docker build -f Dockerfile-dev -t ${{ secrets.DOCKER_USERNAME }}/berich:${{ steps.set-tag.outputs.image_tag }} .
 
       - name: Docker Hub Push
         run: docker push ${{ secrets.DOCKER_USERNAME }}/berich:${{ steps.set-tag.outputs.image_tag }}
