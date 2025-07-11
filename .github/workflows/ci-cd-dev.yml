@@ -85,7 +85,7 @@ jobs:
             fi
       
             # 최신 docker-compose.yml 받아오기
-            curl -L -o https://raw.githubusercontent.com/${{ github.repository }}/develop/docker-compose.dev.yml
+            curl -L https://raw.githubusercontent.com/${{ github.repository }}/develop/docker-compose.dev.yml
       
             # 최신 이미지 pull
             sudo docker pull ${{ secrets.DOCKER_USERNAME }}/berich:latest
