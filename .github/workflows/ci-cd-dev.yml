@@ -38,6 +38,9 @@ jobs:
       - name: Build with Gradle Wrapper
         run: ./gradlew clean build -x test
 
+      - name: Copy JAR to app.jar
+        run: cp build/libs/*.jar build/libs/app.jar
+
       - name: Set image tag
         id: set-tag
         run: echo "image_tag=$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
