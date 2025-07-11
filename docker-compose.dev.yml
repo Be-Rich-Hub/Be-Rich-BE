@@ -3,7 +3,7 @@ version: "3.8"
 services:
   app:
     container_name: web-server
-    image: ${DOCKER_REPO_NAME}/berich:latest
+    image: "${DOCKER_USERNAME}/berich:${IMAGE_TAG}"
     environment:
       PROFILE: dev
       TZ: Asia/Seoul
