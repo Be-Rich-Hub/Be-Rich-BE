@@ -71,6 +71,7 @@ jobs:
           script: |
             set -e
             
+            IMAGE_TAG="${{ needs.build-docker-image.outputs.image_tag }}"
             LOG_STREAM_ID=$(date +"%Y%m%d-%H%M%S")
 
             mkdir -p ~/deploy
