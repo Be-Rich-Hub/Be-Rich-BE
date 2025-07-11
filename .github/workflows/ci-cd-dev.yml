@@ -38,6 +38,11 @@ jobs:
       - name: Build with Gradle Wrapper
         run: ./gradlew clean build -x test
 
+      - name: Check current directory and build/libs content before copying jar
+        run: |
+          pwd
+          ls -l build/libs
+
       - name: Copy JAR to app.jar
         run: cp build/libs/*.jar build/libs/app.jar
 
