@@ -41,8 +41,9 @@ public class SecurityConfig {
     private static final String[] PERMIT_URL_ARRAY = {
             "/",
             "/swagger-ui/**", // Swagger UI
+            "/swagger/**", // Swagger UI (custom path)
             "/v3/api-docs/**", // Swagger API docs
-            "/h2-console/**", // H2 Console
+            "/api-docs/**", // Swagger API docs (custom path)
             "/error",
             // Auth-related paths
             "/api/auth/**",
