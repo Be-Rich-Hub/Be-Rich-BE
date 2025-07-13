@@ -1,9 +1,7 @@
 package org.example.berichbe.domain.setting.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,8 +32,7 @@ public class SettingController {
     private final SettingService settingService;
     private final MemberRepository memberRepository;
 
-    @Operation(summary = "예산 설정", description = "로그인한 사용자의 예산을 설정합니다.",
-            security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(summary = "예산 설정", description = "로그인한 사용자의 예산을 설정합니다.")
     @ApiResponse(responseCode = "200", description = "예산 설정 성공")
     @ApiResponse(responseCode = "400", description = "잘못된 요청 (예: 예산은 음수일 수 없습니다)")
     @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자")
@@ -43,7 +40,7 @@ public class SettingController {
     @ApiResponse(responseCode = "500", description = "서버 내부 오류")
     @PostMapping("/budget")
     public org.example.berichbe.global.api.dto.ApiResponse<String> setBudget(
-            @Parameter(hidden = true) @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody BudgetRequestDto budgetRequestDto
     ) {
         if (userDetails == null) {
