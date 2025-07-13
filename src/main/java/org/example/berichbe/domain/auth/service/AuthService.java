@@ -178,8 +178,7 @@ public class AuthService {
 
         String accessToken = jwtTokenProvider.createAccessToken(authentication);
         // String refreshToken = jwtTokenProvider.generateRefreshToken(authentication); // 리프레시 토큰 기능은 현재 미구현
-        boolean budgetSet = member.getBudget() != null;
 
-        return new LoginResponseDto(accessToken, member.getId(), member.getName(), member.getEmail(), budgetSet);
+        return new LoginResponseDto(accessToken, member.getId(), member.getName(), member.getEmail());
     }
 } 
