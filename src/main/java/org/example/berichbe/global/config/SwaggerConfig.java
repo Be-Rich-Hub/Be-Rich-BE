@@ -32,7 +32,7 @@ public class SwaggerConfig {
     @Bean
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
-                .servers(List.of(new Server().url("/"))); // 기본 서버
+                .servers(List.of(new Server().url("http://localhost:8080"))); // 기본 서버
     }
 
     @Bean
@@ -42,4 +42,4 @@ public class SwaggerConfig {
                 .pathsToMatch("/**")
                 .build();
     }
-} 
+}
