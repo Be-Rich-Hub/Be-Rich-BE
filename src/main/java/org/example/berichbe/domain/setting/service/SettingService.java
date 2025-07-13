@@ -3,9 +3,11 @@ package org.example.berichbe.domain.setting.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.berichbe.domain.setting.dto.BudgetRequestDto;
-import org.example.berichbe.domain.user.entity.User;
-import org.example.berichbe.domain.user.repository.UserRepository;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.example.berichbe.domain.member.entity.Member;
+import org.example.berichbe.domain.member.repository.MemberRepository;
+import org.example.berichbe.global.api.exception.BadRequestException;
+import org.example.berichbe.global.api.exception.NotFoundException;
+import org.example.berichbe.global.api.status.common.CommonErrorCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,13 +17,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class SettingService {
 
-    private final UserRepository userRepository;
+    private final MemberRepository memberRepository;
 
-    public void setBudget(Long userId, BudgetRequestDto budgetRequestDto) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다. ID: " + userId));
+    public void setBudget(Long memberId, BudgetRequestDto budgetRequestDto) {
+        if (budgetRequestDto.amount() < 0) {
+            throw new BadRequestException(CommonErrorCode.BUDGET_CANNOT_BE_NEGATIVE);
+        }
 
-        user.updateBudget(budgetRequestDto.getAmount());
-        log.info("예산 설정 완료. User ID: {}, 예산: {}", userId, budgetRequestDto.getAmount());
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new NotFoundException(CommonErrorCode.USER_NOT_FOUND));
+
+        member.updateBudget(budgetRequestDto.amount());
+        log.info("예산 설정 완료. Member ID: {}, 예산: {}", memberId, budgetRequestDto.amount());
     }
 } 

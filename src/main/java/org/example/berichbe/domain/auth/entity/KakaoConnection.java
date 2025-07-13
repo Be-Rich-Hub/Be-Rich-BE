@@ -8,7 +8,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.berichbe.domain.auth.enums.ProviderType;
-import org.example.berichbe.domain.user.entity.User;
+import org.example.berichbe.domain.member.entity.Member;
 
 @Entity
 @Getter
@@ -18,16 +18,16 @@ import org.example.berichbe.domain.user.entity.User;
 public class KakaoConnection extends SocialConnection {
 
     // KakaoConnection에만 특화된 필드가 있다면 여기에 추가합니다.
-    // 예: 카카오 프로필 이미지 URL, 카카오 닉네임 등 (User 엔티티와 중복될 수 있으므로 신중히 결정)
+    // 예: 카카오 프로필 이미지 URL, 카카오 닉네임 등 (Member 엔티티와 중복될 수 있으므로 신중히 결정)
     // 현재는 특별한 필드가 없으므로 비워둡니다.
 
     @Builder
-    public KakaoConnection(User user, Long kakaoProviderId) { // 카카오 ID는 Long 타입으로 받음
-        super(user, ProviderType.KAKAO, String.valueOf(kakaoProviderId)); // 부모 생성자 호출, providerId는 String으로 변환
+    public KakaoConnection(Member member, Long kakaoProviderId) { // 카카오 ID는 Long 타입으로 받음
+        super(member, ProviderType.KAKAO, String.valueOf(kakaoProviderId)); // 부모 생성자 호출, providerId는 String으로 변환
     }
 
-    // SocialConnection 에서 id, user, provider, providerId 필드를 상속받으므로 중복 선언 불필요.
+    // SocialConnection 에서 id, member, provider, providerId 필드를 상속받으므로 중복 선언 불필요.
     // 기존의 kakaoId 필드는 SocialConnection의 providerId로 대체됨.
-    // 기존의 user 필드 및 연관관계는 SocialConnection 에서 관리.
-    // 기존의 setUser 편의 메서드도 SocialConnection에서 관리하거나, 필요시 User 엔티티의 편의 메서드 수정.
+    // 기존의 member 필드 및 연관관계는 SocialConnection 에서 관리.
+    // 기존의 setMember 편의 메서드도 SocialConnection에서 관리하거나, 필요시 Member 엔티티의 편의 메서드 수정.
 } 

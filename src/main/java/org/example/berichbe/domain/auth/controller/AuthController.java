@@ -14,15 +14,21 @@ import org.example.berichbe.domain.auth.dto.request.LoginRequestDto;
 import org.example.berichbe.domain.auth.dto.request.SignUpRequestDto;
 import org.example.berichbe.domain.auth.dto.response.LoginResponseDto;
 import org.example.berichbe.domain.auth.dto.response.SignUpRequiredResponseDto;
+import org.example.berichbe.domain.auth.enums.AuthErrorCode;
+import org.example.berichbe.domain.auth.exception.EmailAlreadyExistsException;
+import org.example.berichbe.domain.auth.exception.InvalidProviderTypeException;
+import org.example.berichbe.domain.auth.exception.KakaoApiFailedException;
+import org.example.berichbe.domain.auth.exception.SocialAccountAlreadyLinkedException;
 import org.example.berichbe.domain.auth.service.AuthService;
 import org.example.berichbe.domain.auth.service.KakaoApiService;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.example.berichbe.global.api.exception.ApiException;
+import org.example.berichbe.global.api.exception.BadRequestException;
+import org.example.berichbe.global.api.status.common.CommonErrorCode;
+import org.example.berichbe.global.api.status.common.CommonSuccessCode;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
+
 import java.util.Map;
 
 @Tag(name = "인증 API", description = "사용자 로그인 및 회원가입 관련 API")
@@ -35,43 +41,29 @@ public class AuthController {
     private final AuthService authService;
     private final KakaoApiService kakaoApiService;
 
-    private ResponseEntity<Map<String, String>> createErrorResponse(HttpStatus status, String error, String message) {
-        Map<String, String> responseBody = new HashMap<>();
-        responseBody.put("error", error);
-        responseBody.put("message", message);
-        return ResponseEntity.status(status).body(responseBody);
-    }
-
     @Operation(summary = "카카오 로그인/등록", description = "카카오 Access Token을 사용하여 로그인하거나 신규 사용자인 경우 등록 절차를 안내합니다.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "로그인 성공 또는 회원가입 필요 정보 반환",
                     content = @Content(mediaType = "application/json",
                             schema = @Schema(oneOf = {LoginResponseDto.class, SignUpRequiredResponseDto.class}))),
             @ApiResponse(responseCode = "400", description = "잘못된 카카오 토큰 또는 사용자 정보 조회 실패"),
-            @ApiResponse(responseCode = "401", description = "카카오 인증 실패"),
             @ApiResponse(responseCode = "409", description = "이메일 중복 (카카오 제공 이메일이 이미 시스템에 존재)"),
-            @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+            @ApiResponse(responseCode = "500", description = "카카오 API 연동 실패")
     })
     @PostMapping("/kakao/login")
-    public ResponseEntity<?> kakaoLoginOrRegister(@Valid @RequestBody KakaoLoginRequestDto kakaoLoginRequestDto) {
+    public org.example.berichbe.global.api.dto.ApiResponse<?> kakaoLoginOrRegister(@Valid @RequestBody KakaoLoginRequestDto kakaoLoginRequestDto) {
         try {
             Object result = authService.kakaoLoginOrRegister(kakaoLoginRequestDto);
-            return ResponseEntity.ok(result);
-        } catch (IllegalArgumentException e) {
-            log.error("Kakao login error - Invalid argument: {}", e.getMessage(), e);
-            return createErrorResponse(HttpStatus.BAD_REQUEST, "InvalidArgument", e.getMessage());
-        } catch (IllegalStateException e) {
-            log.error("Kakao login error - Illegal state: {}", e.getMessage(), e);
-            return createErrorResponse(HttpStatus.CONFLICT, "IllegalState", e.getMessage());
-        } catch (RuntimeException e) {
-            log.error("Kakao login error - RuntimeException: {}", e.getMessage(), e);
-            if (e.getMessage() != null && e.getMessage().contains("카카오 API 호출 중 오류")) {
-                 return createErrorResponse(HttpStatus.UNAUTHORIZED, "KakaoApiError", "카카오 인증 또는 사용자 정보 조회에 실패했습니다.");
-            }
-            return createErrorResponse(HttpStatus.BAD_REQUEST, "KakaoProcessingError", e.getMessage());
+            return org.example.berichbe.global.api.dto.ApiResponse.success(CommonSuccessCode.OK, result);
+        } catch (KakaoApiFailedException e) {
+            log.error("Kakao login error - Kakao API failed: {}", e.getMessage(), e);
+            throw new ApiException(AuthErrorCode.KAKAO_API_FAILED, AuthErrorCode.KAKAO_API_FAILED.getStatus());
+        } catch (EmailAlreadyExistsException e) {
+            log.warn("Kakao login attempt with existing email: {}", e.getMessage(), e);
+            throw new ApiException(AuthErrorCode.EMAIL_ALREADY_EXISTS, AuthErrorCode.EMAIL_ALREADY_EXISTS.getStatus());
         } catch (Exception e) {
             log.error("Kakao login error - Unexpected exception: {}", e.getMessage(), e);
-            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "ServerError", "카카오 로그인 처리 중 예기치 않은 오류가 발생했습니다.");
+            throw new ApiException(CommonErrorCode.INTERNAL_SERVER_ERROR, CommonErrorCode.INTERNAL_SERVER_ERROR.getStatus());
         }
     }
 
@@ -84,19 +76,25 @@ public class AuthController {
             @ApiResponse(responseCode = "500", description = "서버 내부 오류")
     })
     @PostMapping("/signup")
-    public ResponseEntity<?> signUp(@Valid @RequestBody SignUpRequestDto signUpRequestDto) {
+    public org.example.berichbe.global.api.dto.ApiResponse<LoginResponseDto> signUp(@Valid @RequestBody SignUpRequestDto signUpRequestDto) {
         try {
             LoginResponseDto loginResponseDto = authService.signUp(signUpRequestDto);
-            return ResponseEntity.status(HttpStatus.CREATED).body(loginResponseDto);
-        } catch (IllegalStateException e) {
-            log.error("Sign up error - Illegal state: {}", e.getMessage(), e);
-            return createErrorResponse(HttpStatus.CONFLICT, "IllegalState", e.getMessage());
-        } catch (IllegalArgumentException e) {
-            log.error("Sign up error - Invalid argument: {}", e.getMessage(), e);
-            return createErrorResponse(HttpStatus.BAD_REQUEST, "InvalidArgument", e.getMessage());
+            return org.example.berichbe.global.api.dto.ApiResponse.success(CommonSuccessCode.CREATED, loginResponseDto);
+        } catch (EmailAlreadyExistsException e) {
+            log.warn("Sign up attempt with existing email: {}", signUpRequestDto.email(), e);
+            throw new ApiException(AuthErrorCode.EMAIL_ALREADY_EXISTS, AuthErrorCode.EMAIL_ALREADY_EXISTS.getStatus());
+        } catch (InvalidProviderTypeException e) {
+            log.warn("Sign up attempt with invalid provider type: {}", signUpRequestDto.providerType(), e);
+            throw new ApiException(AuthErrorCode.INVALID_PROVIDER_TYPE, AuthErrorCode.INVALID_PROVIDER_TYPE.getStatus());
+        } catch (SocialAccountAlreadyLinkedException e) {
+            log.warn("Sign up attempt with already linked social account: Provider={}, ID={}", signUpRequestDto.providerType(), signUpRequestDto.providerId(), e);
+            throw new ApiException(AuthErrorCode.SOCIAL_ACCOUNT_ALREADY_LINKED, AuthErrorCode.SOCIAL_ACCOUNT_ALREADY_LINKED.getStatus());
+        } catch (BadRequestException e) {
+            log.warn("Sign up attempt with bad request: {}", e.getMessage(), e);
+            throw e;
         } catch (Exception e) {
             log.error("Sign up error - Unexpected exception: {}", e.getMessage(), e);
-            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "ServerError", "회원가입 처리 중 예기치 않은 오류가 발생했습니다.");
+            throw new ApiException(CommonErrorCode.INTERNAL_SERVER_ERROR, CommonErrorCode.INTERNAL_SERVER_ERROR.getStatus());
         }
     }
 
@@ -108,19 +106,16 @@ public class AuthController {
             @ApiResponse(responseCode = "500", description = "서버 내부 오류")
     })
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequestDto loginRequestDto) {
+    public org.example.berichbe.global.api.dto.ApiResponse<LoginResponseDto> login(@Valid @RequestBody LoginRequestDto loginRequestDto) {
         try {
             LoginResponseDto loginResponse = authService.login(loginRequestDto);
-            return ResponseEntity.ok(loginResponse);
-        } catch (UsernameNotFoundException e) {
-            log.warn("Login attempt failed - User not found: {}", loginRequestDto.getEmail(), e);
-            return createErrorResponse(HttpStatus.UNAUTHORIZED, "UserNotFound", "사용자를 찾을 수 없거나 비밀번호가 일치하지 않습니다.");
+            return org.example.berichbe.global.api.dto.ApiResponse.success(CommonSuccessCode.OK, loginResponse);
         } catch (AuthenticationException e) {
-            log.warn("Login attempt failed - Authentication error: {}", loginRequestDto.getEmail(), e);
-            return createErrorResponse(HttpStatus.UNAUTHORIZED, "AuthenticationError", "사용자를 찾을 수 없거나 비밀번호가 일치하지 않습니다.");
+            log.warn("Login attempt failed for email [{}]: {}", loginRequestDto.email(), e.getMessage());
+            throw new ApiException(CommonErrorCode.UNAUTHORIZED, CommonErrorCode.UNAUTHORIZED.getStatus());
         } catch (Exception e) {
-            log.error("Login error - Unexpected exception: {}", e.getMessage(), e);
-            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "ServerError", "로그인 처리 중 예기치 않은 오류가 발생했습니다.");
+            log.error("Login error - Unexpected exception for email [{}]: {}", loginRequestDto.email(), e.getMessage(), e);
+            throw new ApiException(CommonErrorCode.INTERNAL_SERVER_ERROR, CommonErrorCode.INTERNAL_SERVER_ERROR.getStatus());
         }
     }
 
@@ -132,21 +127,19 @@ public class AuthController {
             @ApiResponse(responseCode = "500", description = "서버 내부 오류")
     })
     @GetMapping("/kakao/token/test")
-    public ResponseEntity<?> getKakaoAccessTokenForTest(@RequestParam("code") String code) {
+    public org.example.berichbe.global.api.dto.ApiResponse<?> getKakaoAccessTokenForTest(@RequestParam("code") String code) {
         if (code == null || code.trim().isEmpty()) {
-            return createErrorResponse(HttpStatus.BAD_REQUEST, "MissingCode", "인가 코드가 필요합니다.");
+            throw new ApiException(CommonErrorCode.ILLEGAL_ARGUMENT, CommonErrorCode.ILLEGAL_ARGUMENT.getStatus());
         }
         try {
             String accessToken = kakaoApiService.getAccessTokenFromKakao(code);
-            Map<String, String> response = new HashMap<>();
-            response.put("kakao_access_token", accessToken);
-            return ResponseEntity.ok(response);
+            return org.example.berichbe.global.api.dto.ApiResponse.success(CommonSuccessCode.OK, Map.of("kakao_access_token", accessToken));
         } catch (RuntimeException e) {
             log.error("Error getting Kakao access token for test: {}", e.getMessage(), e);
-            return createErrorResponse(HttpStatus.BAD_REQUEST, "KakaoApiError", "카카오 Access Token 발급 중 오류 발생: " + e.getMessage());
-        } catch (Exception e) {
-            log.error("Unexpected error in getKakaoAccessTokenForTest: {}", e.getMessage(), e);
-            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "ServerError", "테스트용 카카오 토큰 발급 중 예기치 않은 오류 발생");
+            throw new ApiException(AuthErrorCode.KAKAO_API_FAILED, AuthErrorCode.KAKAO_API_FAILED.getStatus());
+        } catch(Exception e) {
+            log.error("Error getting Kakao access token for test: {}", e.getMessage(), e);
+            throw new ApiException(CommonErrorCode.INTERNAL_SERVER_ERROR, CommonErrorCode.INTERNAL_SERVER_ERROR.getStatus());
         }
     }
 } 

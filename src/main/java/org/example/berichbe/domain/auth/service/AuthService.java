@@ -10,10 +10,16 @@ import org.example.berichbe.domain.auth.dto.response.LoginResponseDto;
 import org.example.berichbe.domain.auth.dto.response.SignUpRequiredResponseDto;
 import org.example.berichbe.domain.auth.entity.KakaoConnection;
 import org.example.berichbe.domain.auth.entity.SocialConnection;
-import org.example.berichbe.domain.auth.repository.SocialConnectionRepository;
 import org.example.berichbe.domain.auth.enums.ProviderType;
-import org.example.berichbe.domain.user.entity.User;
-import org.example.berichbe.domain.user.repository.UserRepository;
+import org.example.berichbe.domain.auth.exception.InvalidProviderTypeException;
+import org.example.berichbe.domain.auth.exception.EmailAlreadyExistsException;
+import org.example.berichbe.domain.auth.exception.KakaoApiFailedException;
+import org.example.berichbe.domain.auth.exception.SocialAccountAlreadyLinkedException;
+import org.example.berichbe.domain.auth.repository.SocialConnectionRepository;
+import org.example.berichbe.domain.member.entity.Member;
+import org.example.berichbe.domain.member.repository.MemberRepository;
+import org.example.berichbe.global.api.exception.BadRequestException;
+import org.example.berichbe.global.api.status.common.CommonErrorCode;
 import org.example.berichbe.global.jwt.JwtTokenProvider;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -21,15 +27,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -37,7 +39,7 @@ import java.util.Optional;
 @Transactional
 public class AuthService {
 
-    private final UserRepository userRepository;
+    private final MemberRepository memberRepository;
     private final SocialConnectionRepository socialConnectionRepository;
     private final KakaoApiService kakaoApiService;
     private final PasswordEncoder passwordEncoder;
@@ -45,49 +47,38 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
 
     /**
-     * 카카오 Access Token을 이용한 로그인/회원가입 분기 처리
-     * @param kakaoLoginRequestDto 카카오 Access Token을 담은 DTO
-     * @return 로그인 성공 시 LoginResponseDto, 회원가입 필요 시 SignUpRequiredResponseDto
+     * 카카오 로그인/회원가입
+     * @param kakaoLoginRequestDto 카카오 로그인 정보를 담은 DTO
+     * @return 로그인 성공 정보 또는 회원가입 필요 정보
      */
     public Object kakaoLoginOrRegister(KakaoLoginRequestDto kakaoLoginRequestDto) {
         // 1. 카카오 토큰으로 카카오 사용자 정보 조회
-        KakaoUserInfoResponseDto kakaoUserInfo = kakaoApiService.getUserInfo(kakaoLoginRequestDto.getAccessToken());
-        if (kakaoUserInfo == null || kakaoUserInfo.getId() == null) {
-            // TODO: 커스텀 예외 처리 (예: KakaoApiFailedException)
-            throw new RuntimeException("카카오 사용자 정보를 가져오는데 실패했습니다.");
+        KakaoUserInfoResponseDto kakaoUserInfo = kakaoApiService.getUserInfo(kakaoLoginRequestDto.accessToken());
+        if (kakaoUserInfo == null || kakaoUserInfo.id() == null) {
+            throw new KakaoApiFailedException();
         }
-
-        Long kakaoProviderIdLong = kakaoUserInfo.getId();
-        String kakaoProviderId = String.valueOf(kakaoProviderIdLong);
-
+        
         // 2. DB에서 kakaoProviderId로 사용자 조회
+        String kakaoProviderId = String.valueOf(kakaoUserInfo.id());
         Optional<SocialConnection> socialConnectionOpt = socialConnectionRepository.findByProviderAndProviderId(ProviderType.KAKAO, kakaoProviderId);
 
         if (socialConnectionOpt.isPresent()) {
             // 3-1. 기존 사용자: 로그인 처리 (JWT 발급)
-            User user = socialConnectionOpt.get().getUser();
-            log.info("기존 사용자 로그인 (카카오): {}", user.getEmail());
-            return createLoginResponse(user);
+            Member member = socialConnectionOpt.get().getMember();
+            log.info("기존 사용자 로그인 (카카오): {}", member.getEmail());
+            return createLoginResponse(member);
         } else {
             // 3-2. 신규 사용자: 회원가입 필요 정보 반환
             log.info("신규 사용자 (카카오), 회원가입 필요. Kakao Provider ID: {}", kakaoProviderId);
             String emailFromKakao = kakaoUserInfo.getEmail();
-            String nicknameFromKakao = kakaoUserInfo.getNickname();
 
             // 이메일 중복 체크 (카카오 이메일이 이미 다른 계정에 사용 중일 수 있음)
-            if (emailFromKakao != null && userRepository.existsByEmail(emailFromKakao)) {
-                // TODO: 이메일 중복 시 어떻게 처리할지 정책 필요. 여기서는 예외 발생.
-                // 혹은, SignUpRequiredResponseDto에 해당 정보 포함하여 프론트에서 처리 유도
-                log.warn("카카오에서 받은 이메일 {}이 이미 시스템에 존재합니다. Kakao Provider ID: {}", emailFromKakao, kakaoProviderId);
-                throw new IllegalStateException("이미 사용 중인 이메일입니다. 다른 이메일로 가입해주세요. (카카오 계정의 이메일이 이미 등록되어 있습니다.)");
+            if (emailFromKakao != null && memberRepository.existsByEmail(emailFromKakao)) {
+                log.warn("카카오 로그인 시 이미 등록된 이메일로 가입 시도: {}", emailFromKakao);
+                throw new EmailAlreadyExistsException();
             }
 
-            return new SignUpRequiredResponseDto(
-                    kakaoProviderIdLong,
-                    emailFromKakao,
-                    nicknameFromKakao,
-                    "카카오 계정과 연동된 정보가 없습니다. 회원가입을 진행해주세요."
-            );
+            return new SignUpRequiredResponseDto(ProviderType.KAKAO.name(), kakaoProviderId, emailFromKakao);
         }
     }
 
@@ -97,74 +88,69 @@ public class AuthService {
      * @return LoginResponseDto 로그인 성공 정보 (JWT 포함)
      */
     public LoginResponseDto signUp(SignUpRequestDto signUpRequestDto) {
-        if (userRepository.existsByEmail(signUpRequestDto.getEmail())) {
-            // TODO: 커스텀 예외 (예: EmailAlreadyExistsException)
-            throw new IllegalStateException("이미 사용 중인 이메일입니다.");
+        if (memberRepository.existsByEmail(signUpRequestDto.email())) {
+            log.warn("자체 회원가입 시 이미 등록된 이메일로 가입 시도: {}", signUpRequestDto.email());
+            throw new EmailAlreadyExistsException();
         }
 
-        // User 엔티티 생성 및 저장
-        User newUser = User.builder()
-                .email(signUpRequestDto.getEmail())
-                .password(passwordEncoder.encode(signUpRequestDto.getPassword())) // 비밀번호 암호화
-                .name(signUpRequestDto.getName())
-                .build();
-        userRepository.save(newUser);
-        log.info("신규 사용자 가입 완료: {}", newUser.getEmail());
+        String encodedPassword = null; // 소셜 로그인을 대비해 null로 초기화
+        // 소셜 로그인인 경우(providerId가 있는 경우)와 자체 회원가입을 분기
+        if (StringUtils.hasText(signUpRequestDto.providerId())) {
+            log.info("소셜 회원가입 사용자({})는 비밀번호를 null로 설정합니다.", signUpRequestDto.email());
+        } else {
+            // 자체 회원가입 시에는 반드시 비밀번호 필요
+            if (!StringUtils.hasText(signUpRequestDto.password())) {
+                log.warn("자체 회원가입 시도 시 비밀번호 누락: email={}", signUpRequestDto.email());
+                throw new BadRequestException(CommonErrorCode.ILLEGAL_ARGUMENT);
+            }
+            encodedPassword = passwordEncoder.encode(signUpRequestDto.password());
+        }
+
+
+        Member newMember = Member.createMember(signUpRequestDto, encodedPassword);
+        memberRepository.save(newMember);
+        log.info("신규 사용자 가입 완료: {}", newMember.getEmail());
 
         // 소셜 연동 정보가 있다면 관련 엔티티 생성 및 연결
-        if (StringUtils.hasText(signUpRequestDto.getProviderType()) && StringUtils.hasText(signUpRequestDto.getProviderId())) {
-            ProviderType providerTypeEnum;
-            try {
-                providerTypeEnum = ProviderType.valueOf(signUpRequestDto.getProviderType().toUpperCase());
-            } catch (IllegalArgumentException e) {
-                log.warn("지원하지 않는 ProviderType 입니다: {}", signUpRequestDto.getProviderType());
-                throw new IllegalArgumentException("지원하지 않는 소셜 로그인 타입입니다: " + signUpRequestDto.getProviderType());
-            }
-
-            String socialProviderId = signUpRequestDto.getProviderId();
-
-            if (socialConnectionRepository.findByProviderAndProviderId(providerTypeEnum, socialProviderId).isPresent()) {
-                log.warn("이미 연동된 {} Provider ID로 회원가입 시도: {}", providerTypeEnum, socialProviderId);
-                throw new IllegalStateException("이미 다른 계정에 연동된 소셜 계정입니다.");
-            }
-
-            SocialConnection socialConnection = null;
-            switch (providerTypeEnum) {
-                case KAKAO:
-                    // KakaoConnection의 생성자는 Long 타입의 providerId를 기대하므로 변환 시도
-                    try {
-                        Long kakaoProviderIdLong = Long.parseLong(socialProviderId);
-                        socialConnection = KakaoConnection.builder()
-                                .user(newUser)
-                                .kakaoProviderId(kakaoProviderIdLong)
-                                .build();
-                        log.info("카카오 연동 정보 생성. Kakao Provider ID: {}", socialProviderId);
-                    } catch (NumberFormatException e) {
-                        log.error("카카오 Provider ID가 유효한 Long 타입이 아닙니다: {}", socialProviderId);
-                        throw new IllegalArgumentException("카카오 Provider ID는 숫자여야 합니다.");
-                    }
-                    break;
-                // case NAVER: // 추후 네이버 로그인 추가 시
-                //     socialConnection = NaverConnection.builder()...build();
-                //     log.info("네이버 연동 정보 생성. Naver Provider ID: {}", socialProviderId);
-                //     break;
-                default:
-                    log.warn("지원하지 않는 ProviderType에 대한 SocialConnection 생성 시도: {}", providerTypeEnum);
-                    // 이전에 ProviderType.valueOf 에서 걸러지지만, 방어적으로 처리
-                    throw new IllegalArgumentException("지원하지 않는 소셜 로그인 타입입니다: " + providerTypeEnum);
-            }
-
-            if (socialConnection != null) {
-                newUser.addSocialConnection(socialConnection);
-                userRepository.save(newUser); // User의 socialConnections 변경사항을 DB에 반영
-            }
-        } else if (StringUtils.hasText(signUpRequestDto.getProviderType()) || StringUtils.hasText(signUpRequestDto.getProviderId())) {
-            // providerType 또는 providerId 중 하나만 제공된 경우
-            log.warn("소셜 연동 정보가 올바르지 않습니다. providerType: {}, providerId: {}", signUpRequestDto.getProviderType(), signUpRequestDto.getProviderId());
-            throw new IllegalArgumentException("소셜 연동을 위해서는 providerType과 providerId가 모두 필요합니다.");
+        if (StringUtils.hasText(signUpRequestDto.providerType()) && StringUtils.hasText(signUpRequestDto.providerId())) {
+            handleSocialConnection(signUpRequestDto, newMember);
+        } else if (StringUtils.hasText(signUpRequestDto.providerType()) || StringUtils.hasText(signUpRequestDto.providerId())) {
+            throw new BadRequestException(CommonErrorCode.ILLEGAL_ARGUMENT);
         }
 
-        return createLoginResponse(newUser);
+        return createLoginResponse(newMember);
+    }
+
+    private void handleSocialConnection(SignUpRequestDto signUpRequestDto, Member newMember) {
+        ProviderType providerTypeEnum;
+        try {
+            providerTypeEnum = ProviderType.valueOf(signUpRequestDto.providerType().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("지원하지 않는 ProviderType 입니다: {}", signUpRequestDto.providerType());
+            throw new InvalidProviderTypeException();
+        }
+
+        String socialProviderId = signUpRequestDto.providerId();
+        if (socialConnectionRepository.findByProviderAndProviderId(providerTypeEnum, socialProviderId).isPresent()) {
+            log.warn("이미 연동된 소셜 계정입니다: ProviderType: {}, ProviderId: {}", providerTypeEnum, socialProviderId);
+            throw new SocialAccountAlreadyLinkedException();
+        }
+        
+        SocialConnection socialConnection;
+        if (providerTypeEnum == ProviderType.KAKAO) {
+            try {
+                Long kakaoProviderIdLong = Long.parseLong(socialProviderId);
+                socialConnection = KakaoConnection.builder().member(newMember).kakaoProviderId(kakaoProviderIdLong).build();
+            } catch (NumberFormatException e) {
+                throw new BadRequestException(CommonErrorCode.ILLEGAL_ARGUMENT);
+            }
+        } else {
+            // 다른 소셜 로그인 추가 시 여기에 분기 처리
+            throw new InvalidProviderTypeException();
+        }
+
+        newMember.addSocialConnection(socialConnection);
+        
     }
 
     /**
@@ -176,38 +162,40 @@ public class AuthService {
         // 1. Spring Security를 사용하여 사용자 인증 시도
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        loginRequestDto.getEmail(),
-                        loginRequestDto.getPassword()
+                        loginRequestDto.email(),
+                        loginRequestDto.password()
                 )
         );
 
         // 2. 인증 성공 시 SecurityContext에 Authentication 객체 저장
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        // 3. 인증된 사용자 정보로 User 엔티티 조회
-        //    UserDetailsServiceImpl에서 반환된 UserDetails의 username은 email임
-        User user = userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new UsernameNotFoundException("인증된 사용자를 DB에서 찾을 수 없습니다: " + authentication.getName()));
+        // 3. 인증된 사용자 정보로 Member 엔티티 조회
+        //    UserDetailsServiceImpl에서 사용자를 찾지 못하면 AuthenticationManager가
+        //    이미 AuthenticationException을 발생시키므로, 여기서의 orElseThrow는 불필요합니다.
+        //    인증이 성공했으므로 .get()은 항상 안전합니다.
+        Member member = memberRepository.findByEmail(authentication.getName()).get();
 
         // 4. JWT 토큰 생성 및 LoginResponseDto 반환
-        return createLoginResponse(user); // 기존의 JWT 발급 및 응답 생성 로직 재활용
+        return createLoginResponse(member); // 기존의 JWT 발급 및 응답 생성 로직 재활용
     }
 
     /**
-     * User 엔티티 기반으로 LoginResponseDto 생성 (JWT 발급 포함)
-     * @param user 사용자 엔티티
+     * Member 엔티티 기반으로 LoginResponseDto 생성 (JWT 발급 포함)
+     * @param member 사용자 엔티티
      * @return LoginResponseDto
      */
-    private LoginResponseDto createLoginResponse(User user) {
+    private LoginResponseDto createLoginResponse(Member member) {
         // Spring Security Authentication 객체 생성 (UserDetails 기반)
         // 여기서는 간단히 이메일과 권한만으로 Authentication 객체를 생성하여 토큰 발급에 사용
         // UserDetailsServiceImpl의 loadUserByUsername 로직과 유사하게 권한 설정 가능
         List<GrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
-        Authentication authentication = new UsernamePasswordAuthenticationToken(user.getEmail(), null, authorities);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(member.getEmail(), null, authorities);
 
         String accessToken = jwtTokenProvider.createAccessToken(authentication);
-        boolean budgetSet = user.getBudget() != null;
+        // String refreshToken = jwtTokenProvider.generateRefreshToken(authentication); // 리프레시 토큰 기능은 현재 미구현
+        boolean budgetSet = member.getBudget() != null;
 
-        return new LoginResponseDto(accessToken, user.getId(), user.getName(), user.getEmail(), budgetSet);
+        return new LoginResponseDto(accessToken, member.getId(), member.getName(), member.getEmail(), budgetSet);
     }
 } 

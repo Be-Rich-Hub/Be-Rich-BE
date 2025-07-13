@@ -5,7 +5,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.berichbe.domain.auth.enums.ProviderType;
-import org.example.berichbe.domain.user.entity.User;
+import org.example.berichbe.domain.member.entity.Member;
 import org.example.berichbe.global.entity.BaseTimeEntity;
 
 @Entity
@@ -22,7 +22,7 @@ public abstract class SocialConnection extends BaseTimeEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    private Member member;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -31,14 +31,15 @@ public abstract class SocialConnection extends BaseTimeEntity {
     @Column(nullable = false, unique = true, length = 255) // provider 마다 고유해야 함 (실제로는 provider + providerId 조합이 unique)
     private String providerId; // 소셜 제공자가 발급한 사용자 고유 ID
 
-    public SocialConnection(User user, ProviderType provider, String providerId) {
-        this.user = user;
+    // 자식 클래스에서만 호출할 수 있도록 protected로 변경
+    protected SocialConnection(Member member, ProviderType provider, String providerId) {
+        this.member = member;
         this.provider = provider;
         this.providerId = providerId;
     }
 
-    // 연관관계 편의 메서드
-    public void setUser(User user) {
-        this.user = user;
+    //== 연관관계 편의 메서드 ==//
+    public void setMember(Member member) {
+        this.member = member;
     }
 } 

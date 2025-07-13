@@ -1,14 +1,8 @@
 package org.example.berichbe.domain.auth.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@Setter
-@NoArgsConstructor
-public class KakaoLoginRequestDto {
+public record KakaoLoginRequestDto(
     @NotBlank(message = "카카오 액세스 토큰은 필수입니다.")
-    private String accessToken;
-} 
+    String accessToken
+) {} 
