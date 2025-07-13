@@ -13,7 +13,7 @@ import java.util.List;
 @Table(name = "members") // 테이블 이름을 'members'로 변경
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder
 public class Member extends BaseTimeEntity { 
 
@@ -24,19 +24,14 @@ public class Member extends BaseTimeEntity {
     @Column(nullable = false, unique = true, length = 50)
     private String email; // 사용자 이메일 (로그인 ID로 사용 가능)
 
-    @Column(nullable = true, length = 100)
+    @Column(length = 100)
     private String password;
 
     @Column(nullable = false, length = 30)
     private String name; // 사용자 이름 또는 닉네임
 
-    @Column
-    private Long budget; // 사용자 예산
-
-    @Builder.Default // null 말고 빈 리스트로 초기화
-    @OneToMany(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true) 
-    private List<SocialConnection> socialConnections = new ArrayList<>();
-
+    @OneToMany(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<SocialConnection> socialConnections;
 
     //== 정적 팩토리 메서드 ==//
     /**
@@ -45,11 +40,12 @@ public class Member extends BaseTimeEntity {
      * @param encodedPassword 암호화된 비밀번호
      * @return 생성된 Member 엔티티
      */
-    public static Member createMember(SignUpRequestDto dto, String encodedPassword) { 
+    public static Member createMember(SignUpRequestDto dto, String encodedPassword) {
         return Member.builder()
                 .email(dto.email())
                 .password(encodedPassword)
                 .name(dto.name())
+                .socialConnections(new ArrayList<>())
                 .build();
     }
 
@@ -59,11 +55,6 @@ public class Member extends BaseTimeEntity {
         if (socialConnection.getMember() != this) {
             socialConnection.setMember(this);
         }
-    }
-
-    //== 비즈니스 로직 ==//
-    public void updateBudget(Long budget) {
-        this.budget = budget;
     }
 
     public void updateName(String name) {
