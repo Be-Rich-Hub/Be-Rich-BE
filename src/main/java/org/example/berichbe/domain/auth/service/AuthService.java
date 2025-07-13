@@ -19,6 +19,7 @@ import org.example.berichbe.domain.auth.repository.SocialConnectionRepository;
 import org.example.berichbe.domain.member.entity.Member;
 import org.example.berichbe.domain.member.repository.MemberRepository;
 import org.example.berichbe.global.api.exception.BadRequestException;
+import org.example.berichbe.global.api.exception.NotFoundException;
 import org.example.berichbe.global.api.status.common.CommonErrorCode;
 import org.example.berichbe.global.jwt.JwtTokenProvider;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -26,7 +27,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -159,24 +159,8 @@ public class AuthService {
      * @return LoginResponseDto 로그인 성공 정보 (JWT 포함)
      */
     public LoginResponseDto login(LoginRequestDto loginRequestDto) {
-        // 1. Spring Security를 사용하여 사용자 인증 시도
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        loginRequestDto.email(),
-                        loginRequestDto.password()
-                )
-        );
+        Member member = memberRepository.findByEmail(loginRequestDto.email()).orElseThrow(() -> new NotFoundException(CommonErrorCode.USER_NOT_FOUND));
 
-        // 2. 인증 성공 시 SecurityContext에 Authentication 객체 저장
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-
-        // 3. 인증된 사용자 정보로 Member 엔티티 조회
-        //    UserDetailsServiceImpl에서 사용자를 찾지 못하면 AuthenticationManager가
-        //    이미 AuthenticationException을 발생시키므로, 여기서의 orElseThrow는 불필요합니다.
-        //    인증이 성공했으므로 .get()은 항상 안전합니다.
-        Member member = memberRepository.findByEmail(authentication.getName()).get();
-
-        // 4. JWT 토큰 생성 및 LoginResponseDto 반환
         return createLoginResponse(member); // 기존의 JWT 발급 및 응답 생성 로직 재활용
     }
 
