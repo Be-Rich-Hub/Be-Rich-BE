@@ -45,16 +45,6 @@ public class Transaction extends BaseTimeEntity {
     @Column(nullable = false)
     private PaymentMethod method; // 결제 방법
 
-    @Builder
-    private Transaction(Member member, Category category, TransactionType type, int amount, String memo, PaymentMethod method) {
-        this.member = member;
-        this.category = category;
-        this.type = type;
-        this.amount = amount;
-        this.memo = memo;
-        this.method = method;
-    }
-
     //== 정적 팩토리 메서드 ==//
     public static Transaction createTransaction(Member member, Category category, TransactionType type, int amount, String memo, PaymentMethod method) {
         return Transaction.builder()
